@@ -1,7 +1,7 @@
-'use client';
+"use client";
+
 import React, { useEffect, useState } from 'react';
 import {
-
     Card,
     CardContent,
     Typography,
@@ -16,62 +16,111 @@ import {
     Alert,
     Stack,
 } from '@mui/material';
+import { getCurrentUser } from '@/services/auth';
+import { api } from '@/services/api';
 
-
-interface Todo {
-    id: string;
+// Tipo correto conforme resposta da API Laravel
+interface Task {
+    id: number;
     title: string;
-    description: string;
-    completed: boolean;
-    dueDate: string;
+    description: string | null;
     priority: 'low' | 'medium' | 'high';
-    createdAt: string;
+    status: 'pending' | 'in_progress' | 'completed';
+    due_date: string | null; // formato ISO com timezone
+    created_at: string;
+    creator: {
+        id: number;
+        name: string;
+        email: string;
+    };
+    assignee: {
+        id: number;
+        name: string;
+        email: string;
+    } | null;
 }
 
 interface DashboardStats {
-    totalTodos: number;
-    completedTodos: number;
-    pendingTodos: number;
-    highPriorityTodos: number;
+    totalTasks: number;
+    completedTasks: number;
+    pendingTasks: number;
+    highPriorityTasks: number;
 }
 
 export default function HomePage() {
-    const [todos, setTodos] = useState<Todo[]>([]);
+    const [tasks, setTasks] = useState<Task[]>([]);
     const [stats, setStats] = useState<DashboardStats>({
-        totalTodos: 0,
-        completedTodos: 0,
-        pendingTodos: 0,
-        highPriorityTodos: 0,
+        totalTasks: 0,
+        completedTasks: 0,
+        pendingTasks: 0,
+        highPriorityTasks: 0,
     });
     const [loading, setLoading] = useState(true);
+    const [userName, setUserName] = useState<string>('');
 
     useEffect(() => {
-        fetchTodos();
+        // Carrega nome do usuário
+        getCurrentUser().then(user => {
+            if (user) {
+                setUserName((user as any).name || '');
+            }
+        });
+
+        // Carrega tarefas
+        fetchTasks();
     }, []);
 
-    const fetchTodos = async () => {
+    const fetchTasks = async () => {
         try {
-            const response = await fetch('/api/todos');
-            const data = await response.json();
-            setTodos(data);
-            calculateStats(data);
+            setLoading(true);
+            const response = await api.get('/tasks');
+            // A API retorna { data: [...] }
+            const taskList: Task[] = response.data.data || [];
+
+            setTasks(taskList);
+            calculateStats(taskList);
         } catch (error) {
-            console.error('Erro ao carregar todos:', error);
+            console.error('Erro ao carregar tarefas:', error);
         } finally {
             setLoading(false);
         }
     };
 
-    const calculateStats = (todoList: Todo[]) => {
-        const completed = todoList.filter((t) => t.completed).length;
-        const highPriority = todoList.filter((t) => t.priority === 'high').length;
+    const calculateStats = (taskList: Task[]) => {
+        const completed = taskList.filter(t => t.status === 'completed').length;
+        const highPriority = taskList.filter(t => t.priority === 'high').length;
 
         setStats({
-            totalTodos: todoList.length,
-            completedTodos: completed,
-            pendingTodos: todoList.length - completed,
-            highPriorityTodos: highPriority,
+            totalTasks: taskList.length,
+            completedTasks: completed,
+            pendingTasks: taskList.length - completed,
+            highPriorityTasks: highPriority,
         });
+    };
+
+    // Formatação simples da data (ex: 30 Dez 2025)
+    const formatDueDate = (dateString: string | null) => {
+        if (!dateString) return null;
+        const date = new Date(dateString);
+        const day = String(date.getDate()).padStart(2, '0');
+        const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+        return `${day} ${months[date.getMonth()]} ${date.getFullYear()}`;
+    };
+
+    const getPriorityLabel = (priority: string) => {
+        return { high: 'Alta', medium: 'Média', low: 'Baixa' }[priority] || priority;
+    };
+
+    const getPriorityColor = (priority: string): 'error' | 'warning' | 'success' => {
+        return { high: 'error', medium: 'warning', low: 'success' }[priority] as any || 'default';
+    };
+
+    const getStatusLabel = (status: string) => {
+        return { completed: 'Concluída', in_progress: 'Em Progresso', pending: 'Pendente' }[status] || status;
+    };
+
+    const getStatusColor = (status: string): 'success' | 'info' | 'warning' => {
+        return { completed: 'success', in_progress: 'info', pending: 'warning' }[status] as any || 'warning';
     };
 
     if (loading) {
@@ -85,66 +134,87 @@ export default function HomePage() {
     return (
         <Container maxWidth="lg" sx={{ py: 8 }}>
             <Typography variant="h3" component="h1" gutterBottom sx={{ fontWeight: 'bold', mb: 4 }}>
-                Dashboard
+                Bem-vindo{userName ? `, ${userName}` : ''}
             </Typography>
 
             {/* Stats Grid */}
-            <Stack
-                direction={{ xs: 'column', sm: 'row' }}  // Vertical no celular, horizontal no tablet+
-                spacing={3}
-                sx={{ mb: 4 }}
-            >
-                <StatCard label="Total de Tarefas" value={stats.totalTodos} color="info" />
-                <StatCard label="Concluídas" value={stats.completedTodos} color="success" />
-                <StatCard label="Pendentes" value={stats.pendingTodos} color="warning" />
-                <StatCard label="Alta Prioridade" value={stats.highPriorityTodos} color="error" />
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={3} sx={{ mb: 4 }}>
+                <StatCard label="Total de Tarefas" value={stats.totalTasks} color="info" />
+                <StatCard label="Concluídas" value={stats.completedTasks} color="success" />
+                <StatCard label="Pendentes" value={stats.pendingTasks} color="warning" />
+                <StatCard label="Alta Prioridade" value={stats.highPriorityTasks} color="error" />
             </Stack>
-            
-            {/* Todos List */}
+
+            {/* Lista de Tarefas */}
             <Card>
                 <CardContent>
-                    <Typography variant="h5" component="h2" sx={{ fontWeight: 'semibold', mb: 2 }}>
-                        Tarefas
+                    <Typography variant="h5" component="h2" sx={{ fontWeight: '600', mb: 2 }}>
+                        Tarefas Recentes
                     </Typography>
                     <Divider sx={{ mb: 2 }} />
-                    {todos.length === 0 ? (
+
+                    {tasks.length === 0 ? (
                         <Alert severity="info">Nenhuma tarefa encontrada</Alert>
                     ) : (
                         <List>
-                            {todos.map((todo, index) => (
-                                <Box key={todo.id}>
+                            {tasks.map((task, index) => (
+                                <Box key={task.id}>
                                     <ListItem sx={{ flexDirection: 'column', alignItems: 'flex-start', py: 2 }}>
                                         <Box sx={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                                             <ListItemText
                                                 primary={
                                                     <Typography
+                                                        variant="subtitle1"
                                                         sx={{
-                                                            textDecoration: todo.completed ? 'line-through' : 'none',
-                                                            color: todo.completed ? 'gray' : 'inherit',
+                                                            textDecoration: task.status === 'completed' ? 'line-through' : 'none',
+                                                            color: task.status === 'completed' ? 'text.disabled' : 'inherit',
+                                                            fontWeight: 'medium',
                                                         }}
                                                     >
-                                                        {todo.title}
+                                                        {task.title}
                                                     </Typography>
                                                 }
-                                                secondary={todo.description}
+                                                secondary={
+                                                    <>
+                                                        {task.description && (
+                                                            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                                                                {task.description}
+                                                            </Typography>
+                                                        )}
+                                                        <Box sx={{ display: 'flex', gap: 1, mt: 1, flexWrap: 'wrap' }}>
+                                                            <Chip
+                                                                label={getPriorityLabel(task.priority)}
+                                                                size="small"
+                                                                color={getPriorityColor(task.priority)}
+                                                                variant="outlined"
+                                                            />
+                                                            <Chip
+                                                                label={getStatusLabel(task.status)}
+                                                                size="small"
+                                                                color={getStatusColor(task.status)}
+                                                                variant="outlined"
+                                                            />
+                                                            {task.due_date && formatDueDate(task.due_date) && (
+                                                                <Chip
+                                                                    label={formatDueDate(task.due_date)!}
+                                                                    size="small"
+                                                                    variant="outlined"
+                                                                />
+                                                            )}
+                                                            {task.assignee && (
+                                                                <Chip
+                                                                    label={`Para: ${task.assignee.name}`}
+                                                                    size="small"
+                                                                    variant="outlined"
+                                                                />
+                                                            )}
+                                                        </Box>
+                                                    </>
+                                                }
                                             />
-                                            <Box sx={{ display: 'flex', gap: 1, ml: 2 }}>
-                                                <Chip
-                                                    label={todo.priority}
-                                                    size="small"
-                                                    color={getPriorityChipColor(todo.priority)}
-                                                    variant="outlined"
-                                                />
-                                                <Chip
-                                                    label={todo.completed ? 'Concluída' : 'Pendente'}
-                                                    size="small"
-                                                    color={todo.completed ? 'success' : 'warning'}
-                                                    variant="outlined"
-                                                />
-                                            </Box>
                                         </Box>
                                     </ListItem>
-                                    {index < todos.length - 1 && <Divider />}
+                                    {index < tasks.length - 1 && <Divider />}
                                 </Box>
                             ))}
                         </List>
@@ -157,7 +227,7 @@ export default function HomePage() {
 
 function StatCard({ label, value, color }: { label: string; value: number; color: 'info' | 'success' | 'warning' | 'error' }) {
     return (
-        <Card sx={{ bgcolor: `${color}.main`, color: 'white', height: '100%' }}>
+        <Card sx={{ bgcolor: `${color}.main`, color: 'white', flex: 1, minWidth: 200 }}>
             <CardContent>
                 <Typography gutterBottom sx={{ opacity: 0.9 }}>
                     {label}
@@ -168,13 +238,4 @@ function StatCard({ label, value, color }: { label: string; value: number; color
             </CardContent>
         </Card>
     );
-}
-
-function getPriorityChipColor(priority: string): 'error' | 'warning' | 'success' {
-    const colors = {
-        high: 'error',
-        medium: 'warning',
-        low: 'success',
-    };
-    return (colors[priority as keyof typeof colors] || 'success') as 'error' | 'warning' | 'success';
 }

@@ -78,13 +78,26 @@ class AuthController extends Controller
     }
 
     /**
-     * Retorna os dados do usuário autenticado
+     * Atualizar Dados do usuário
      */
-    public function me(Request $request)
+    public function update(Request $request)
     {
-        return response()->json([
-            'user' => $request->user()
+        $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'required|string|email|max:255|unique:users',
+            'password' => 'required|string|min:8|confirmed',
         ]);
+
+        $user = User::updated([
+            'name' => $request->name,
+            'email' => $request->email,
+            'password' => Hash::make($request->password),
+        ]);
+
+        return response()->json([
+            'message' => 'Usuário atualizado com sucesso',
+            'user' => $user,
+        ], 200);
     }
 
     /**
