@@ -104,7 +104,14 @@ export default function TasksPage() {
       handleCloseModal();
       setRefreshKey(prev => prev + 1);
     } catch (err: any) {
-      setError(err.message || 'Erro ao salvar tarefa');
+        if (err.response && err.response.status === 422) {
+        const validationErrors = err.response.data.errors;
+      
+        const firstError = Object.values(validationErrors)[0][0];
+        setError(firstError);
+      } else {
+        setError(err.response?.data?.message || err.message || 'Erro ao salvar tarefa');
+      }
     }
   };
 
