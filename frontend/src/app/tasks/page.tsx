@@ -109,9 +109,9 @@ export default function TasksPage() {
       
         const firstError = Object.values(validationErrors)[0][0];
         setError(firstError);
-    } else {
-      setError(err.response?.data?.message || err.message || 'Erro ao salvar tarefa');
-    }
+      } else {
+        setError(err.response?.data?.message || err.message || 'Erro ao salvar tarefa');
+      }
     }
   };
 
