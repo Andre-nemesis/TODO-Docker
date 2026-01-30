@@ -34,14 +34,21 @@ class TaskController extends Controller
      * Criar nova tarefa
      */
     public function store(Request $request)
-    {
+    {   
+        $messages = [
+            'due_date.date' => 'O formato da data enviado não é válido.',
+            'due_date.after_or_equal' => 'A data de entrega não pode ser no passado. Escolha hoje ou um dia futuro.',
+            'title.required' => 'O título da tarefa é obrigatório.',
+        ];
+
+
         $validated = $request->validate([
             'title' => 'required|string|max:255',
             'description' => 'nullable|string',
             'priority' => 'required|in:low,medium,high',
             'due_date' => 'nullable|date|after_or_equal:today',
             'assigned_to' => 'nullable|exists:users,id', // Pode atribuir na criação
-        ]);
+        ], $messages);
 
         if(!$validated) {
             return response()->json([
